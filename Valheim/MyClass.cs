@@ -15,16 +15,7 @@ using HarmonyLib;
 using UnityEngine;
 
 namespace ValheimMod
-{
-//	public class NameOf
-//    {
-//        public static String nameof<T>(Expression<Func<T>> name)
-//        {
-//            MemberExpression expressionBody = (MemberExpression)name.Body;
-//            return expressionBody.Member.Name;
-//        }
-//    }
-	
+{	
 	[BepInPlugin("Banderi.MinimapMod", "Rotating Minimap", "1.0.0")]
 	[BepInProcess("valheim.exe")]
 	
@@ -43,32 +34,7 @@ namespace ValheimMod
 			harmony.PatchAll();
 		}
 		
-//		static Color[] RotateMatrix(Color[] matrix, int n)
-//		{
-//	         Color[] ret = new Color[n * n];
-//	         
-//	         for (int i = 0; i < n; ++i) {
-//	             for (int j = 0; j < n; ++j) {
-//	                 ret[i*n + j] = matrix[(n - j - 1) * n + i];
-//	             }
-//	         }
-//	         
-//	         return ret;
-//	     }
-//		static Texture2D convtex(Texture mainTexture)
-//		{
-//			Texture2D texture2D = new Texture2D(mainTexture.width, mainTexture.height, TextureFormat.RGBA32, false);
-//  
-//			RenderTexture currentRT = RenderTexture.active;
-//			
-//			RenderTexture renderTexture = new RenderTexture(mainTexture.width, mainTexture.height, 32);
-//			Graphics.Blit(mainTexture, renderTexture);
-//			
-//			RenderTexture.active = renderTexture;
-//			texture2D.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0);
-//			texture2D.Apply();
-//			return texture2D;
-//		}
+		//
 		
 		[HarmonyPatch(typeof(Minimap), "AddPin")]
 		class PinsUpdate1 { static bool Prefix() { logger.LogWarning("Adding pin!"); return true; }}
@@ -76,6 +42,8 @@ namespace ValheimMod
 		class PinsUpdate2 { static bool Prefix() { logger.LogWarning("Clearing pins!"); return true; }}
 		[HarmonyPatch(typeof(Minimap), "ForceRegen")]
 		class PinsUpdate3 { static bool Prefix() { logger.LogWarning("Forcing regen!"); return true; }}
+//		[HarmonyPatch(typeof(Minimap), "UpdatePlayerMarker")]
+//		class PinsUpdate4 { static bool Prefix() { return false; }}
 		
 		//
 		
@@ -84,8 +52,7 @@ namespace ValheimMod
 		{
 			static bool Prefix(ref bool __result)
 			{
-				logger.LogWarning("Setting point to FALSE");
-				__result = false;
+				__result = true;
 				return false;
 			}
 		}
@@ -95,25 +62,15 @@ namespace ValheimMod
 		[HarmonyPatch(typeof(Minimap), "Update")]
 		class MinimapRotation
 		{
-//			public static Texture2D toTexture2D(ref RenderTexture rTex)
-//			{
-//			    Texture2D tex = new Texture2D(rTex.width, rTex.height, TextureFormat.RGB24, false);
-//			    var old_rt = RenderTexture.active;
-//			    RenderTexture.active = rTex;
-//			
-//			    tex.ReadPixels(new Rect(0, 0, rTex.width, rTex.height), 0, 0);
-//			    tex.Apply();
-//			
-//			    RenderTexture.active = old_rt;
-//			    return tex;
-//			}
-//			
 			static private bool initialized = false;
 			static public GameObject mycameraObj;
 			static public Camera mycamera;
-//			static public Camera mycamera = new Camera();
 			static public RenderTexture ctex;
-			static void init()
+			static GameObject duplicateMap;
+			
+			static GameObject newPinsParent;
+			
+			static void init(GameObject map)
 			{
 				if (initialized)
 					return;
@@ -126,12 +83,30 @@ namespace ValheimMod
 					ctex.Create();
 					mycamera.targetTexture = ctex;
 					
+					duplicateMap = GameObject.Instantiate(map, map.transform.parent);
+					newPinsParent = new GameObject();
+					newPinsParent.transform.position = map.transform.position;
+					newPinsParent.transform.SetParent(map.transform.parent);
+					
+					foreach (Transform child in map.transform) {
+//						Vector3 cp = child.gameObject.transform.position;
+//						cp.z = 10.0f;
+						child.gameObject.transform.SetParent(newPinsParent.transform);
+					}
+					
+					
 					initialized = true;
 					logger.LogWarning("MOD: ...Done!");
 				}
 			}
 			
-			static void Postfix(ref UnityEngine.UI.RawImage ___m_mapImageSmall, ref UnityEngine.UI.RawImage ___m_mapImageLarge, ref GameObject ___m_mapSmall, ref GameObject ___m_smallRoot, ref UnityEngine.RectTransform ___m_smallMarker)
+			static void resetTransform(ref Transform t) {
+				t.position = Vector3.zero;
+                t.rotation = Quaternion.identity;
+                t.localScale = Vector3.one;
+			}
+			
+			static void Postfix(ref UnityEngine.UI.RawImage ___m_mapImageSmall, ref UnityEngine.UI.RawImage ___m_mapImageLarge, ref GameObject ___m_mapSmall, ref GameObject ___m_mapLarge, ref GameObject ___m_smallRoot, ref UnityEngine.RectTransform ___m_smallMarker, ref UnityEngine.RectTransform ___m_largeMarker)
 			{
 				Rect rSmall = ___m_mapImageSmall.uvRect;
 				Component imgAsComp = ((Component)(object)___m_mapImageSmall);
@@ -208,34 +183,37 @@ namespace ValheimMod
 //				imgAsComp.transform.RotateAround(new Vector3(0.0f, 0.0f, 0.1f), new Vector3(0.0f, 0.0f, 1.0f), 10);
 				
 				
-//				___m_mapImageLarge.transform.RotateAround(r2c, ___m_mapImageSmall.transform.up, 0.1f);
-				___m_mapImageLarge.transform.Rotate(___m_mapImageLarge.transform.up, Space.World);
-//				___m_mapImageLarge.transform.Rotate(new Vector3(0.0f, 0.0f, 0.1f), Space.Self);
 				
 				
+//				___m_mapLarge.transform.RotateAround(r2c, ___m_mapImageSmall.transform.up, 0.1f);
+//				___m_mapLarge.transform.Rotate(___m_mapLarge.transform.up, Space.Self);
+//				___m_mapLarge.transform.Rotate(new Vector3(0.0f, 0.0f, 0.2f), Space.Self);
 				
+//				___m_largeMarker.transform.Rotate(___m_largeMarker.transform.up, Space.Self); // this rotates correctly
+//				___m_largeMarker.transform.Rotate(new Vector3(0.0f, 0.0f, -0.2f), Space.Self); // this rotates correctly
 				
+//				resetTransform(___m_largeMarker.transform);
 				
-//				init();
-//				mycamera.enabled = false;
-//				mycamera.targetTexture
+				init(___m_mapLarge);
+				duplicateMap.SetActive(false);
+//				init((GameObject)___m_mapImageLarge);
+//				duplicateMap.transform.Rotate(new Vector3(0.0f, 0.0f, 0.2f), Space.Self);
+//				___m_mapLarge.SetActive(false);
+//				___m_mapLarge.transform.position = p;
+//				foreach (Transform child in ___m_mapLarge.transform) {
+//					Vector3 cp = child.gameObject.transform.position;
+//					cp.z = 10.0f;
+//					child.gameObject.transform.position = rot;
+//				}
+				___m_mapLarge.transform.Rotate(new Vector3(0.0f, 0.0f, 0.2f), Space.Self);
 				
-//				Texture2D t = toTexture2D(ref ctex);
-				
-//				___m_mapImageSmall.texture = ctex;
-				
-//				GUI.DrawTexture(new Rect(0, 0, 1000, 000), ctex);
-				
-				
-				
-				
-				
-				
-				
-				
-//				___m_smallMarker.transform.eulerAngles.z = 0;
-//				logger.LogWarning(String.Format("A: {0} {1} {2} {3}", ___m_mapImageSmall.transform.up, ___m_mapSmall.transform.up, ___m_smallMarker.transform.up, 0));
-				
+				logger.LogWarning(String.Format("A: {0} {1} {2} {3} {4}",
+				                                ___m_mapLarge.transform.position,
+				                                newPinsParent.transform.position,
+//				                                ___m_largeMarker.rotation.eulerAngles,
+				                                0,
+				                                ___m_largeMarker.position,
+				                                ___m_largeMarker.localPosition));
 			}
 		}
 	}
