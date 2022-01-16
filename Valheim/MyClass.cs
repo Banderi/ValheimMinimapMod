@@ -25,7 +25,6 @@ namespace ValheimMod
 	public class ValheimMod_RotatingMinimap : BaseUnityPlugin
 	{
 		public static BepInEx.Logging.ManualLogSource logger;
-        
 		private readonly Harmony harmony = new Harmony("Banderi.MinimapMod");
 		void Awake()
 		{
@@ -36,184 +35,97 @@ namespace ValheimMod
 		
 		//
 		
+		static private bool initialized = false;
+		static GameObject newPinsParent;
+		static Quaternion lastPlayerRot;
+		static Vector2 origin;
+		static Vector2 playerMinimapPinPos;
+		
+		static void init(GameObject map) {
+			if (initialized)
+				return;
+			else {
+				logger.LogWarning("MOD: Initializing...");
+				
+				origin = new Vector2(0.0f, 0.0f);
+				newPinsParent = new GameObject();
+				newPinsParent.transform.position = map.transform.position;
+				newPinsParent.transform.SetParent(map.transform.parent);
+				
+				foreach (Transform child in map.transform) {
+					child.gameObject.transform.SetParent(newPinsParent.transform);
+				}					
+				
+				initialized = true;
+				logger.LogWarning("MOD: ...Done!");
+			}
+		}
+		
 		[HarmonyPatch(typeof(Minimap), "AddPin")]
-		class PinsUpdate1 { static bool Prefix() { logger.LogWarning("Adding pin!"); return true; }}
+		class PinsUpdate1 { static bool Prefix(Vector3 pos, Minimap.PinType type, string name) { logger.LogWarning(String.Format("Adding pin! {0} {1} {2}", pos, name, type)); return true; }}
 		[HarmonyPatch(typeof(Minimap), "ClearPins")]
 		class PinsUpdate2 { static bool Prefix() { logger.LogWarning("Clearing pins!"); return true; }}
 		[HarmonyPatch(typeof(Minimap), "ForceRegen")]
 		class PinsUpdate3 { static bool Prefix() { logger.LogWarning("Forcing regen!"); return true; }}
-//		[HarmonyPatch(typeof(Minimap), "UpdatePlayerMarker")]
-//		class PinsUpdate4 { static bool Prefix() { return false; }}
 		
 		//
 		
-		[HarmonyPatch(typeof(Minimap), "IsPointVisible")]
-		class MinimapPinYCheck
-		{
-			static bool Prefix(ref bool __result)
-			{
-				__result = true;
-				return false;
-			}
-		}
-		
-		//
-		
-		[HarmonyPatch(typeof(Minimap), "Update")]
+		[HarmonyPatch(typeof(Minimap), "UpdatePins")]
 		class MinimapRotation
 		{
-			static private bool initialized = false;
-			static public GameObject mycameraObj;
-			static public Camera mycamera;
-			static public RenderTexture ctex;
-			static GameObject duplicateMap;
-			
-			static GameObject newPinsParent;
-			
-			static void init(GameObject map)
-			{
-				if (initialized)
-					return;
-				else {
-					logger.LogWarning("MOD: Initializing...");
-					
-					mycameraObj = new GameObject("mycamera", typeof(Camera));
-					mycamera = mycameraObj.GetComponent(typeof(Camera)) as Camera;
-					ctex = new RenderTexture(1000, 1000, 0, RenderTextureFormat.ARGB32);
-					ctex.Create();
-					mycamera.targetTexture = ctex;
-					
-					duplicateMap = GameObject.Instantiate(map, map.transform.parent);
-					newPinsParent = new GameObject();
-					newPinsParent.transform.position = map.transform.position;
-					newPinsParent.transform.SetParent(map.transform.parent);
-					
-					foreach (Transform child in map.transform) {
-//						Vector3 cp = child.gameObject.transform.position;
-//						cp.z = 10.0f;
-						child.gameObject.transform.SetParent(newPinsParent.transform);
-					}
-					
-					
-					initialized = true;
-					logger.LogWarning("MOD: ...Done!");
-				}
-			}
-			
-			static void resetTransform(ref Transform t) {
-				t.position = Vector3.zero;
-                t.rotation = Quaternion.identity;
-                t.localScale = Vector3.one;
-			}
-			
-			static void Postfix(ref UnityEngine.UI.RawImage ___m_mapImageSmall, ref UnityEngine.UI.RawImage ___m_mapImageLarge, ref GameObject ___m_mapSmall, ref GameObject ___m_mapLarge, ref GameObject ___m_smallRoot, ref UnityEngine.RectTransform ___m_smallMarker, ref UnityEngine.RectTransform ___m_largeMarker)
-			{
-				Rect rSmall = ___m_mapImageSmall.uvRect;
-				Component imgAsComp = ((Component)(object)___m_mapImageSmall);
-//				Material imgMat = ___m_mapImageSmall.material;
-				Vector3 a = imgAsComp.transform.eulerAngles;
-				RectTransform rectTransform = imgAsComp.transform as RectTransform;
-//				Quaternion t = ___m_smallMarker.rotation;
-				Vector3 b = ___m_smallMarker.rotation.eulerAngles;
+			static void Postfix(ref GameObject ___m_mapSmall, ref GameObject ___m_mapLarge, ref UnityEngine.RectTransform ___m_smallMarker)
+			{	
+				init(___m_mapSmall);
+				___m_mapSmall.transform.rotation = Quaternion.Euler(0, 0, lastPlayerRot.eulerAngles.y);
 				
-				RectTransform rectTransform1 = ((Component)(object)___m_mapImageSmall).transform as RectTransform;
-				Vector2 r1s = new Vector2(rectTransform1.rect.width, rectTransform1.rect.height);
-				Vector2 r1c = r1s * 0.5f;
-				Quaternion r1t = rectTransform1.rotation;
-				
-				RectTransform rectTransform2 = ((Component)(object)___m_mapImageLarge).transform as RectTransform;
-				Vector2 r2s = new Vector2(rectTransform2.rect.width, rectTransform2.rect.height);
-				Vector2 r2c = r2s * 0.5f;
-				
-//				Shader shSmall = ___m_mapImageSmall.material.shader;
-//				string fileName = Application.dataPath + "/Resources/RuntimeShaders/mapshader.shader";
-//				if (File.Exists(fileName))
-//				{
-//					string shaderSourceCode = File.ReadAllText(fileName);
-////					Debug.Log(fileName + " already exists.");
-//					logger.LogWarning(shaderSourceCode);
-//				} else {
-//					logger.LogWarning(shaderSourceCode);
-//				}
-////				string[] names = ___m_mapImageSmall.material.GetTexturePropertyNames();
-//				logger.LogWarning(shSmall.ToString());
-//				foreach (var k in )
-//				{
-//					 logger.LogWarning(k);
-//				}
-//				Quaternion rot = Quaternion.Euler(0, 0, Time.time * 0.1f);
-//        		Matrix4x4 m = Matrix4x4.TRS(Vector3.zero, rot, Vector3.one);
-//				___m_mapImageSmall.material.SetInt("_Rotation", 36);
-//				___m_mapImageSmall.material.SetMatrix("_TextureRotation", m);
-//				string[] keys = ___m_mapImageSmall.material.shaderKeywords;
-				
-//				Texture2D tex2Dlarge = ___m_mapImageLarge.texture as Texture2D;
-//				Color[] pixels = tex2Dlarge.GetPixels();
-//				pixels = RotateMatrix(pixels, tex2Dlarge.width);
-//				tex2Dlarge.SetPixels(pixels);
-				
-//				Vector3 myVector = new Vector3(0.0f, 0.0f, 0.0f);
-//				Vector3 myVector2 = new Vector3(0.0f, 0.0f, 1.0f);
-				
-				
-//				SpriteRenderer r1 = ___m_mapSmall.GetComponent<SpriteRenderer>();
-//				SpriteRenderer r2 = ___m_smallRoot.GetComponent<SpriteRenderer>();
-//				SpriteRenderer r3 = imgAsComp.GetComponent<SpriteRenderer>();
-//				int l = ___m_mapSmall.layer;
-//				int l2 = ___m_smallRoot.layer;
-				
-				Vector3 rot = new Vector3(0f, 0f, 45f * (float)Math.Sin(Time.time));
-				Vector3 p = ___m_smallMarker.transform.position;
-				p.x += (float)Math.Sin(Time.time);
-				p.y += (float)Math.Sin(Time.time);
-				p.z += (float)Math.Sin(Time.time);
-//				Component whatToRotate = ((Component)(object)___m_mapImageSmall.transform.localRotation);
-//				___m_smallMarker.transform.position = p;
-				Quaternion q = Quaternion.Euler(rot.x, rot.y, rot.z);
-//				q.w = 0.0f;
-//				___m_mapSmall.transform.rotation = q;
-//				q = ___m_mapSmall.transform.rotation;
-				
-//				___m_mapSmall.transform.Rotate(new Vector3(0.0f, 0.0f, 0.1f), Space.Self);
-//				___m_smallMarker.transform.Rotate(new Vector3(0.0f, 0.0f, -0.1f), Space.Self);
-				
-//				Vector3 center = new Vector3(rSmall.x + rSmall.width/2.0f, rSmall.y + rSmall.height/2.0f, 0.0f);
-//				Vector3 center = new Vector3(rectTransform.rect.center.x, rectTransform.rect.center.y, 0.0f);
-//				___m_mapImageSmall.transform.RotateAround(center, new Vector3(0.0f, 0.0f, 1.0f), 0.1f);
-//				imgAsComp.transform.RotateAround(new Vector3(0.0f, 0.0f, 0.1f), new Vector3(0.0f, 0.0f, 1.0f), 10);
-				
-				
-				
-				
-//				___m_mapLarge.transform.RotateAround(r2c, ___m_mapImageSmall.transform.up, 0.1f);
-//				___m_mapLarge.transform.Rotate(___m_mapLarge.transform.up, Space.Self);
-//				___m_mapLarge.transform.Rotate(new Vector3(0.0f, 0.0f, 0.2f), Space.Self);
-				
-//				___m_largeMarker.transform.Rotate(___m_largeMarker.transform.up, Space.Self); // this rotates correctly
-//				___m_largeMarker.transform.Rotate(new Vector3(0.0f, 0.0f, -0.2f), Space.Self); // this rotates correctly
-				
-//				resetTransform(___m_largeMarker.transform);
-				
-				init(___m_mapLarge);
-				duplicateMap.SetActive(false);
-//				init((GameObject)___m_mapImageLarge);
-//				duplicateMap.transform.Rotate(new Vector3(0.0f, 0.0f, 0.2f), Space.Self);
-//				___m_mapLarge.SetActive(false);
-//				___m_mapLarge.transform.position = p;
-//				foreach (Transform child in ___m_mapLarge.transform) {
-//					Vector3 cp = child.gameObject.transform.position;
-//					cp.z = 10.0f;
-//					child.gameObject.transform.position = rot;
-//				}
-				___m_mapLarge.transform.Rotate(new Vector3(0.0f, 0.0f, 0.2f), Space.Self);
-				
+				return;
 				logger.LogWarning(String.Format("A: {0} {1} {2} {3} {4}",
-				                                ___m_mapLarge.transform.position,
+				                                ___m_mapSmall.transform.position,
 				                                newPinsParent.transform.position,
 //				                                ___m_largeMarker.rotation.eulerAngles,
 				                                0,
-				                                ___m_largeMarker.position,
-				                                ___m_largeMarker.localPosition));
+				                                ___m_smallMarker.position,
+				                                ___m_smallMarker.localPosition));
+			}
+		}
+		[HarmonyPatch(typeof(Minimap), "WorldToMapPoint")]
+		class MinimapCenterPos
+		{
+			static private void Postfix(Vector3 p, float mx, float my)
+			{
+				Player localPlayer = Player.m_localPlayer;
+				Vector3 position = localPlayer.transform.position;
+				if (p == position) { // this is the local player pin's RELATIVE (UV) position used to calculating the anchor points later
+					playerMinimapPinPos.x = mx;
+					playerMinimapPinPos.y = my;
+				}
+			}
+		}
+		[HarmonyPatch(typeof(Minimap), "UpdatePlayerMarker")]
+		class MinimapCenterRot
+		{
+			static private void Postfix(Quaternion playerRot, ref UnityEngine.RectTransform ___m_smallMarker)
+			{
+				lastPlayerRot = playerRot;
+				___m_smallMarker.transform.rotation = Quaternion.Euler(0, 0, 0);
+			}
+		}
+		
+		[HarmonyPatch(typeof(Minimap), "MapPointToLocalGuiPos")]
+		class MinimapIcons
+		{
+			static private void Prefix(Minimap.MapMode ___m_mode, ref float mx, ref float my, UnityEngine.UI.RawImage img)
+			{
+				if (___m_mode != Minimap.MapMode.Large) {
+					
+					Vector2 A = new Vector2(mx, my);
+					Vector2 a = A - playerMinimapPinPos;
+					Vector2 b = Quaternion.Euler(0, 0, lastPlayerRot.eulerAngles.y) * a;
+					Vector2 B = playerMinimapPinPos + b;
+					
+					mx = B.x;
+					my = B.y;
+				}
 			}
 		}
 	}
