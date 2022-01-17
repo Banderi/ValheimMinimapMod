@@ -7,7 +7,9 @@ build/
 *.zip
 export.cfg
 export_presets.cfg
-TESTS/
+TESTS/*
+ORIG/*
+PACK/*
 
 # Mono-specific ignores
 .mono/
